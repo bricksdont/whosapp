@@ -1,10 +1,10 @@
-# whosup
+# whosapp
 
 Train classifiers with Whatsapp chat data and predict the author of new messages
 
 # Requirements
 
-`whosup` does not need to be installed, but has the following dependencies:
+`whosapp` does not need to be installed, but has the following dependencies:
 
  - Python > 2.7
  - Python package `scikit-learn`
@@ -12,19 +12,19 @@ Train classifiers with Whatsapp chat data and predict the author of new messages
 
 # Usage
 
-`whosup` is a Python script that can either train and save a model, or make predictions with a previously trained model. Train a model with the option `--train`:
+`whosapp` is a Python script that can either train and save a model, or make predictions with a previously trained model. Train a model with the option `--train`:
 
-    python whosup.py --train --model model.pkl --data training.txt
+    python whosapp.py --train --model model.pkl --data training.txt
 
 If `--data` is omitted, the trainer assumes training data is supplied from STDIN. The option `--model` is required in any case.
 
 After training a model, use it for predictions with `--predict`:
 
-    echo "completely new message! You'll never guess who wrote me." | python whosup.py --predict --model model.pkl
+    echo "completely new message! You'll never guess who wrote me." | python whosapp.py --predict --model model.pkl
 
 Alternatively, you can specify a file with a list of samples for which a class should be predicted with the option `--samples`.
 
-Type `python whosup.py --help` for more details and advanced options.
+Type `python whosapp.py --help` for more details and advanced options.
 
 # How to put together training data
 
@@ -34,4 +34,4 @@ https://faq.whatsapp.com/fil/android/23756533
 
 This file can be used directly with the `--data` option for training. The chat should contain a sizeable number of messages, do not try anything below 1000 messages.
 
-The names predicted by a `whosup` model will correspond to the names people have on your phone. If that's inconvenient, use the option `--rename-authors`.
+The names predicted by a `whosapp` model will correspond to the names people have on your phone. If that's inconvenient, use the option `--rename-authors`.
