@@ -25,3 +25,11 @@ After training a model, use it for predictions with `--predict`:
 Alternatively, you can specify a file with a list of samples for which a class should be predicted with the option `--samples`.
 
 Type `python whosup.py --help` for more details and advanced options.
+
+# How to put together training data
+
+The program works directly on the data dump currently provided by Whatsapp. On your phone, find a chat with at least two members, and have the contents emailed to you as a `*.txt` file:
+
+https://faq.whatsapp.com/fil/android/23756533
+
+This file can be used directly with the `--data` option for training. The chat should contain a sizeable number of messages, do not try anything below 1000 messages.
