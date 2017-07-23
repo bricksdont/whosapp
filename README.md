@@ -2,9 +2,17 @@
 
 Train classifiers with Whatsapp chat data and predict the author of new messages
 
+# Requirements
+
+`whosup` does not need to be installed, but has the following dependencies:
+
+ - Python > 2.7
+ - Python package `scikit-learn`
+ - Python package `pandas`
+
 # Usage
 
-whosup is a Python script that can either train and save a model, or make predictions with a previously trained model. Train a model with the option `--train`:
+`whosup` is a Python script that can either train and save a model, or make predictions with a previously trained model. Train a model with the option `--train`:
 
     python whosup.py --train --model model.pkl --data training.txt
 
