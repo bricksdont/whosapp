@@ -16,7 +16,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
 
 from sklearn.model_selection import ShuffleSplit
-from sklearn.model_selection import KFold
 
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn import metrics
@@ -42,6 +41,7 @@ class Trainer(object):
     """
 
     """
+
     def __init__(self, model, data, vectorizer, vectorizer_ngram_order,
                  vectorizer_analyzer, samples_threshold, exclude_authors,
                  rename_authors, class_weight, classifier, evaluation, cv_folds,
@@ -179,22 +179,27 @@ class Trainer(object):
         else:
             raise NotImplementedError
         self.pipeline = Pipeline([
-                ("vectorizer", vectorizer(sublinear_tf=True,
-                 max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
-                 analyzer=self._vectorizer_analyzer)),
-                ("clf", clf)
+            ("vectorizer", vectorizer(sublinear_tf=True,
+                                      max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
+                                      analyzer=self._vectorizer_analyzer)),
+            ("clf", clf)
 
-            ])
+        ])
+        logging.debug(clf)
         logging.debug(self.pipeline)
 
     def _evaluate(self):
         """
         Performs k-fold cross validation and reports averaged F1 scores.
         """
-        k_fold = KFold(n=len(self.df), n_folds=self._cv_folds)
+        ss = ShuffleSplit(n_splits=self._cv_folds,
+                          test_size=self._test_fold_size)
+        logging.debug(ss)
+
         scores = []
-        confusion = numpy.zeros((self.num_classes, self.num_classes), dtype=numpy.int)
-        for train_indices, test_indices in k_fold:
+        confusion = numpy.zeros(
+            (self.num_classes, self.num_classes), dtype=numpy.int)
+        for train_indices, test_indices in ss.split(self.df):
             train_text = self.df.iloc[train_indices]['text'].values
             train_y = self.df.iloc[train_indices]['class'].values
 
@@ -204,14 +209,16 @@ class Trainer(object):
             self.pipeline.fit(train_text, train_y)
             predictions = self.pipeline.predict(test_text)
 
-            logging.info(metrics.classification_report(test_y, predictions, target_names=self.classes))
+            logging.info(metrics.classification_report(
+                test_y, predictions, target_names=self.classes))
 
-            confusion += confusion_matrix(test_y, predictions, labels=self.classes)
+            confusion += confusion_matrix(test_y,
+                                          predictions, labels=self.classes)
             score = f1_score(test_y, predictions, average=self._f1_averaging)
             scores.append(score)
 
-        logging.info('Total messages classified:', len(self.df))
-        logging.info('Score:', sum(scores) / len(scores))
+        logging.info('Total messages classified: %d' % len(self.df))
+        logging.info('Score: %f' % (sum(scores) / len(scores)))
         logging.info('Confusion matrix:')
         logging.info(confusion)
 
@@ -231,6 +238,7 @@ class Trainer(object):
 class Predictor(object):
     """
     """
+
     def __init__(self, model):
         self._model = model
         self._load()
@@ -242,10 +250,16 @@ class Predictor(object):
         self.pipeline = joblib.load(self._model)
         logging.debug("Loading model pipeline from '%s'" % self._model)
 
-    def predict(self, examples):
+    def predict(self, samples):
         """
         """
-        for example in examples:
+        if samples:
+            input_ = codecs.open(samples, "r", "UTF-8")
+        else:
+            input_ = sys.stdin
+
+        for example in input_:
+            example = example.strip()
             print "%s => %s" % (example, self.pipeline.predict([example])[0])
 
 
@@ -390,7 +404,7 @@ def parse_cmd():
         "--output-json",
         action="store_true",
         required=False,
-        help="format predicted classes as JSON"
+        help="format predicted classes as a JSON array"
     )
     predict_options.add_argument(
         "--samples",
@@ -410,7 +424,13 @@ def parse_cmd():
 def main():
     args = parse_cmd()
 
-    level = logging.DEBUG if args.verbose else logging.WARNING
+    # set up logging
+    if args.verbose:
+        level = logging.DEBUG
+    elif args.evaluation:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
     if args.train:
@@ -428,13 +448,11 @@ def main():
                     cv_folds=args.cv_folds,
                     test_fold_size=args.test_fold_size,
                     f1_averaging=args.f1_averaging
-        )
+                    )
         t.train()
     else:
         p = Predictor(model=args.model)
-        examples = [u"ich zieh bald wieder mol um",
-                u"hey fremde Welten", u"wo isch da?", u"schölölö"]
-        p.predict(examples)
+        p.predict(samples=args.samples)
 
 
 if __name__ == '__main__':
