@@ -33,3 +33,5 @@ The program works directly on the data dump currently provided by Whatsapp. On y
 https://faq.whatsapp.com/fil/android/23756533
 
 This file can be used directly with the `--data` option for training. The chat should contain a sizeable number of messages, do not try anything below 1000 messages.
+
+The names predicted by a `whosup` model will correspond to the names people have on your phone. If that's inconvenient, use the option `--rename-authors`.
