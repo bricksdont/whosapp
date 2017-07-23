@@ -86,80 +86,84 @@ class Trainer(object):
         d = defaultdict(list)
         previous = None, None, None
 
-        with codecs.open(self._data, "r", "UTF-8") as data:
-            for line in data:
-                # skip empty lines
-                if line.strip() == "":
-                    continue
+        if self._data:
+            data = codecs.open(self._data, "r", "UTF-8")
+        else:
+            data = sys.stdin
 
-                # skip media notifications
-                if "<Media omitted>" in line:
-                    continue
+        for line in data:
+            # skip empty lines
+            if line.strip() == "":
+                continue
 
-                if re.findall("\d{2}/\d{2}/\d{4}, \d{2}:\d{2}", line):
-                    # line with timestamp and author
+            # skip media notifications
+            if "<Media omitted>" in line:
+                continue
 
-                    parts = line.strip().split("-")
-                    date, time = [p.strip() for p in parts[0].split(",")]
+            if re.findall("\d{2}/\d{2}/\d{4}, \d{2}:\d{2}", line):
+                # line with timestamp and author
 
-                    if ":" in parts[1]:
-                        # line with actual text
-                        author_content = parts[1].split(":")
-                        author = author_content[0].strip()
-                        content = u" ".join(
-                            [x.strip() for x in author_content[1:] if x.strip() != ""])
-                    else:
-                        # line with Whatsapp notification
-                        continue  # for now
+                parts = line.strip().split("-")
+                date, time = [p.strip() for p in parts[0].split(",")]
+
+                if ":" in parts[1]:
+                    # line with actual text
+                    author_content = parts[1].split(":")
+                    author = author_content[0].strip()
+                    content = u" ".join(
+                        [x.strip() for x in author_content[1:] if x.strip() != ""])
                 else:
-                    # line without timestamp, continuation with same author
-                    date, time, author = previous
-                    content = line.strip()
+                    # line with Whatsapp notification
+                    continue  # for now
+            else:
+                # line without timestamp, continuation with same author
+                date, time, author = previous
+                content = line.strip()
 
-                if author in self._exclude_authors:
-                    continue
-                elif author in self._rename_authors:
-                    d[self._rename_authors[author]].append((date, time, content))
-                else:
-                    d[author].append((date, time, content))
+            if author in self._exclude_authors:
+                continue
+            elif author in self._rename_authors:
+                d[self._rename_authors[author]].append((date, time, content))
+            else:
+                d[author].append((date, time, content))
 
-                previous = date, time, author
+            previous = date, time, author
 
-            if self._samples_threshold:
-                deletes = []
-                for k, v in d.iteritems():
-                    if len(v) < self._samples_threshold:
-                        deletes.append(k)
-                for k in deletes:
-                    del d[k]
-
-            logging.debug("Messages with actual content:")
+        if self._samples_threshold:
+            deletes = []
             for k, v in d.iteritems():
-                logging.debug("%s %d" % (k, len(v)))
-            logging.debug("Total messages: %d\n" %
-                          sum([len(v) for v in d.values()]))
+                if len(v) < self._samples_threshold:
+                    deletes.append(k)
+            for k in deletes:
+                del d[k]
 
-            # put in data frame
-            rows = []
-            index = []
-            i = 0
-            for k, vs in d.iteritems():
-                self.classes.append(k)
-                for v in vs:
-                    (date, time, content) = v
-                    rows.append({u'text': content, u'class': k})
-                    index.append(i)
-                    i += 1
+        logging.debug("Messages with actual content:")
+        for k, v in d.iteritems():
+            logging.debug("%s %d" % (k, len(v)))
+        logging.debug("Total messages: %d\n" %
+                      sum([len(v) for v in d.values()]))
 
-            self.num_classes = len(self.classes)
+        # put in data frame
+        rows = []
+        index = []
+        i = 0
+        for k, vs in d.iteritems():
+            self.classes.append(k)
+            for v in vs:
+                (date, time, content) = v
+                rows.append({u'text': content, u'class': k})
+                index.append(i)
+                i += 1
 
-            self.df = DataFrame(rows, index=index)
-            logging.debug("Head of data frame before shuffling:")
-            logging.debug(self.df.head())
-            # shuffle for training
-            self.df = self.df.reindex(numpy.random.permutation(self.df.index))
-            logging.debug("Head of data frame after shuffling:")
-            logging.debug(self.df.head())
+        self.num_classes = len(self.classes)
+
+        self.df = DataFrame(rows, index=index)
+        logging.debug("Head of data frame before shuffling:")
+        logging.debug(self.df.head())
+        # shuffle for training
+        self.df = self.df.reindex(numpy.random.permutation(self.df.index))
+        logging.debug("Head of data frame after shuffling:")
+        logging.debug(self.df.head())
 
     def _build_pipeline(self):
         """
@@ -181,6 +185,7 @@ class Trainer(object):
                 ("clf", clf)
 
             ])
+        logging.debug(self.pipeline)
 
     def _evaluate(self):
         """
@@ -395,9 +400,6 @@ def parse_cmd():
     )
 
     args = parser.parse_args()
-
-    if args.train and not args.data:
-        args.data = sys.stdin
 
     # avoid clash with built-in function
     args.evaluation = args.eval
