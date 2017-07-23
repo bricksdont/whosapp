@@ -39,13 +39,15 @@ sys.stdin = codecs.getreader('utf-8')(sys.__stdin__)
 
 class Trainer(object):
     """
-
+    Reads raw Whatsapp chat data and trains a classifier.
     """
 
     def __init__(self, model, data, vectorizer, vectorizer_ngram_order,
                  vectorizer_analyzer, samples_threshold, exclude_authors,
                  rename_authors, class_weight, classifier, evaluation, cv_folds,
                  test_fold_size, f1_averaging):
+        """
+        """
         self._model = model
         self._data = data
         # vectorizer
@@ -72,6 +74,8 @@ class Trainer(object):
 
     def train(self):
         """
+        Preprocesses data, fits a model, evaluates the classifier
+        and finally saves the model to a file.
         """
         self._preprocess()
         self._build_pipeline()
@@ -82,6 +86,9 @@ class Trainer(object):
 
     def _preprocess(self):
         """
+        Reads lines from the raw Whatsapp data dump and converts
+        them into a dataframe. Date and time are currently extracted
+        but ignored.
         """
         d = defaultdict(list)
         previous = None, None, None
@@ -167,6 +174,8 @@ class Trainer(object):
 
     def _build_pipeline(self):
         """
+        Builds an sklearn Pipeline. The pipeline consists of a kind of
+        vectorizer, followed by a kind of classifier.
         """
         if self._vectorizer == "count":
             vectorizer = CountVectorizer
@@ -190,7 +199,8 @@ class Trainer(object):
 
     def _evaluate(self):
         """
-        Performs k-fold cross validation and reports averaged F1 scores.
+        Performs k-fold cross validation (generalized to shuffle splits
+        for arbitrary train/test ratios) and reports averaged F1 scores.
         """
         ss = ShuffleSplit(n_splits=self._cv_folds,
                           test_size=self._test_fold_size)
@@ -224,11 +234,13 @@ class Trainer(object):
 
     def _fit(self):
         """
+        Fits a model onto the preprocessed data.
         """
         self.pipeline.fit(self.df['text'].values, self.df['class'].values)
 
     def _save(self):
         """
+        Save the whole pipeline to a pickled file.
         """
         from sklearn.externals import joblib
         joblib.dump(self.pipeline, self._model)
@@ -237,14 +249,18 @@ class Trainer(object):
 
 class Predictor(object):
     """
+    Predicts the author of messages, given a trained model.
     """
 
     def __init__(self, model):
+        """
+        """
         self._model = model
         self._load()
 
     def _load(self):
         """
+        Loads a model that was previously trained and saved.
         """
         from sklearn.externals import joblib
         self.pipeline = joblib.load(self._model)
@@ -252,6 +268,7 @@ class Predictor(object):
 
     def predict(self, samples):
         """
+        Predicts the class (=author) of new message samples.
         """
         if samples:
             input_ = codecs.open(samples, "r", "UTF-8")
