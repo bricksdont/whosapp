@@ -15,3 +15,5 @@ After training a model, use it for predictions with `--predict`:
     echo "completely new message! You'll never guess who wrote me." | python whosup.py --predict --model model.pkl
 
 Alternatively, you can specify a file with a list of samples for which a class should be predicted with the option `--samples`.
+
+Type `python whosup.py --help` for more details and advanced options.
