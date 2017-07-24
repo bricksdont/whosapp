@@ -70,6 +70,8 @@ class Trainer(object):
         self.classes = []
         self.num_classes = 0
         self.df = None
+        self.vectorizer = None
+        self.classifier = None
         self.pipeline = None
 
     def train(self):
@@ -82,6 +84,8 @@ class Trainer(object):
         if self._eval:
             self._evaluate()
         self._fit()
+        if self._eval:
+            self._feature_importance()
         self._save()
 
     def _preprocess(self):
@@ -178,23 +182,28 @@ class Trainer(object):
         vectorizer, followed by a kind of classifier.
         """
         if self._vectorizer == "count":
-            vectorizer = CountVectorizer
+            v_class = CountVectorizer
         else:
-            vectorizer = TfidfVectorizer
+            v_class = TfidfVectorizer
+        self.vectorizer = v_class(sublinear_tf=True,
+                                  max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
+                                  analyzer=self._vectorizer_analyzer)
+
         if self._classifier == "sgd-hinge":
-            clf = SGDClassifier(loss='hinge', penalty='l2',
-                                alpha=1e-3, n_iter=5, random_state=42,
-                                class_weight="balanced")
+            self.classifier = SGDClassifier(loss='hinge', penalty='l2',
+                                            alpha=1e-3, n_iter=5, random_state=42,
+                                            class_weight="balanced")
         else:
             raise NotImplementedError
+
         self.pipeline = Pipeline([
-            ("vectorizer", vectorizer(sublinear_tf=True,
-                                      max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
-                                      analyzer=self._vectorizer_analyzer)),
-            ("clf", clf)
+            ("vectorizer", self.vectorizer),
+            ("clf", self.classifier)
 
         ])
-        logging.debug(clf)
+
+        logging.debug(self.vectorizer)
+        logging.debug(self.classifier)
         logging.debug(self.pipeline)
 
     def _evaluate(self):
@@ -231,6 +240,19 @@ class Trainer(object):
         logging.info('Score: %f' % (sum(scores) / len(scores)))
         logging.info('Confusion matrix:')
         logging.info(confusion)
+
+    def _feature_importance(self, k=10):
+        """
+        Determines the top k most informative features for each class (for
+        linear classifiers).
+        Source:
+        http://scikit-learn.org/stable/datasets/twenty_newsgroups.html#filtering-text-for-more-realistic-training
+        """
+        logging.info("Top %d most informative features for each class:" % k)
+        feature_names = numpy.asarray(self.vectorizer.get_feature_names())
+        for i, category in enumerate(self.classes):
+            top_k = numpy.argsort(self.classifier.coef_[i])[-k:]
+            logging.info("%s: %s" % (category, " ".join(feature_names[top_k])))
 
     def _fit(self):
         """
@@ -270,14 +292,13 @@ class Predictor(object):
         """
         Predicts the class (=author) of new message samples.
         """
-        if samples:
-            input_ = codecs.open(samples, "r", "UTF-8")
-        else:
-            input_ = sys.stdin
+        predictions = []
 
-        for example in input_:
-            example = example.strip()
-            print "%s => %s" % (example, self.pipeline.predict([example])[0])
+        for sample in samples:
+            sample = sample.strip()
+            predictions.append((sample, self.pipeline.predict([sample])[0]))
+
+        return predictions
 
 
 def parse_cmd():
@@ -469,7 +490,13 @@ def main():
         t.train()
     else:
         p = Predictor(model=args.model)
-        p.predict(samples=args.samples)
+        if args.samples:
+            input_ = codecs.open(args.samples, "r", "UTF-8")
+        else:
+            input_ = sys.stdin
+        predictions = p.predict(samples=input_)
+        for sample, prediction in predictions:
+            print "%s => %s" % (sample, prediction)
 
 
 if __name__ == '__main__':
