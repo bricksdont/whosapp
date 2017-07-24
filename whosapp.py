@@ -9,16 +9,18 @@ from pandas import DataFrame
 from collections import defaultdict
 
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import ShuffleSplit
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from sklearn.linear_model import SGDClassifier
 
-from sklearn.model_selection import ShuffleSplit
 
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn import metrics
+
+from util import remove_emojis
 
 import logging
 import argparse
@@ -43,7 +45,7 @@ class Trainer(object):
     """
 
     def __init__(self, model, data, vectorizer, vectorizer_ngram_order,
-                 vectorizer_analyzer, samples_threshold, exclude_authors,
+                 vectorizer_analyzer, remove_emojis, samples_threshold, exclude_authors,
                  rename_authors, class_weight, classifier, evaluation, cv_folds,
                  test_fold_size, f1_averaging):
         """
@@ -54,6 +56,7 @@ class Trainer(object):
         self._vectorizer = vectorizer
         self._vectorizer_ngram_order = vectorizer_ngram_order
         self._vectorizer_analyzer = vectorizer_analyzer
+        self._remove_emojis = remove_emojis
         # samples and classes
         self._samples_threshold = samples_threshold
         self._exclude_authors = exclude_authors
@@ -185,9 +188,15 @@ class Trainer(object):
             v_class = CountVectorizer
         else:
             v_class = TfidfVectorizer
+
+        if self._remove_emojis:
+            preprocessor = remove_emojis
+        else:
+            preprocessor = None
+
         self.vectorizer = v_class(sublinear_tf=True,
                                   max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
-                                  analyzer=self._vectorizer_analyzer)
+                                  analyzer=self._vectorizer_analyzer, preprocessor=preprocessor)
 
         if self._classifier == "sgd-hinge":
             self.classifier = SGDClassifier(loss='hinge', penalty='l2',
@@ -210,6 +219,9 @@ class Trainer(object):
         """
         Performs k-fold cross validation (generalized to shuffle splits
         for arbitrary train/test ratios) and reports averaged F1 scores.
+
+        Parts derived from:
+        http://zacstewart.com/2015/04/28/document-classification-with-scikit-learn.html
         """
         ss = ShuffleSplit(n_splits=self._cv_folds,
                           test_size=self._test_fold_size)
@@ -396,6 +408,13 @@ def parse_cmd():
         help="determines whether vectorizer features should be made of words or characters (default: char)"
     )
     train_options.add_argument(
+        "--remove-emojis",
+        action="store_true",
+        required=False,
+        default=False,
+        help="strip emoji characters in high Unicode ranges from the training data (default: False)"
+    )
+    train_options.add_argument(
         "--samples-threshold",
         type=int,
         required=False,
@@ -477,6 +496,7 @@ def main():
                     vectorizer=args.vectorizer,
                     vectorizer_ngram_order=args.vectorizer_ngram_order,
                     vectorizer_analyzer=args.vectorizer_analyzer,
+                    remove_emojis=args.remove_emojis,
                     samples_threshold=args.samples_threshold,
                     exclude_authors=args.exclude_authors,
                     rename_authors=args.rename_authors,
