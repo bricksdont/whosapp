@@ -15,7 +15,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from sklearn.linear_model import SGDClassifier
-
+from sklearn.neural_network import MLPClassifier
 
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn import metrics
@@ -32,7 +32,7 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-numpy.random.seed(6)
+numpy.random.seed(42)
 
 sys.stdout = codecs.getwriter('utf-8')(sys.__stdout__)
 sys.stderr = codecs.getwriter('utf-8')(sys.__stderr__)
@@ -89,7 +89,6 @@ class Trainer(object):
         self._fit()
         if self._eval:
             self._feature_importance()
-        self._save()
 
     def _preprocess(self):
         """
@@ -198,12 +197,20 @@ class Trainer(object):
                                   max_df=0.5, ngram_range=(1, self._vectorizer_ngram_order),
                                   analyzer=self._vectorizer_analyzer, preprocessor=preprocessor)
 
+        if self._class_weight:
+            class_weight = "balanced"
+        else:
+            class_weight = None
+
         if self._classifier == "sgd-hinge":
             self.classifier = SGDClassifier(loss='hinge', penalty='l2',
                                             alpha=1e-3, n_iter=5, random_state=42,
-                                            class_weight="balanced")
+                                            class_weight=class_weight)
         else:
-            raise NotImplementedError
+            self.classifier = MLPClassifier(hidden_layer_sizes=(100, ), activation='relu',
+                                            solver='adam', batch_size='auto', max_iter=200, shuffle=True,
+                                            random_state=42, verbose=True, early_stopping=True,
+                                            validation_fraction=0.1)
 
         self.pipeline = Pipeline([
             ("vectorizer", self.vectorizer),
@@ -258,8 +265,12 @@ class Trainer(object):
         Determines the top k most informative features for each class (for
         linear classifiers).
         Source:
-        http://scikit-learn.org/stable/datasets/twenty_newsgroups.html#filtering-text-for-more-realistic-training
+        http://scikit-learn.org/stable/datasets/twenty_newsgroups.html#filtering \
+        -text-for-more-realistic-training
         """
+        if self._classifier == "mlp":
+            logging.warning("Top k informative features only available for linear classifiers - skipping")
+            return
         logging.info("Top %d most informative features for each class:" % k)
         feature_names = numpy.asarray(self.vectorizer.get_feature_names())
         for i, category in enumerate(self.classes):
@@ -268,11 +279,11 @@ class Trainer(object):
 
     def _fit(self):
         """
-        Fits a model onto the preprocessed data.
+        Fits a model for the preprocessed data.
         """
         self.pipeline.fit(self.df['text'].values, self.df['class'].values)
 
-    def _save(self):
+    def save(self):
         """
         Save the whole pipeline to a pickled file.
         """
@@ -508,6 +519,7 @@ def main():
                     f1_averaging=args.f1_averaging
                     )
         t.train()
+        t.save()
     else:
         p = Predictor(model=args.model)
         if args.samples:
