@@ -50,7 +50,8 @@ class Trainer(object):
                  samples_threshold=None, exclude_authors=[],
                  rename_authors={}, class_weight=False,
                  classifier="mlp", evaluation=False, cv_folds=5,
-                 test_fold_size=0.1, f1_averaging="macro"):
+                 test_fold_size=0.1, f1_averaging="macro", 
+                 mlp_hidden_layers=1, mlp_hidden_size=100):
         """
         """
         self._model = model
@@ -65,8 +66,11 @@ class Trainer(object):
         self._samples_threshold = samples_threshold
         self._exclude_authors = exclude_authors
         self._rename_authors = rename_authors
+        # classifier
         self._class_weight = class_weight
         self._classifier = classifier
+        self._mlp_hidden_layers = mlp_hidden_layers
+        self._mlp_hidden_size = mlp_hidden_size
         # evaluation
         self._eval = evaluation
         self._cv_folds = cv_folds
@@ -212,7 +216,9 @@ class Trainer(object):
                                             alpha=1e-3, n_iter=5, random_state=42,
                                             class_weight=class_weight)
         else:
-            self.classifier = MLPClassifier(hidden_layer_sizes=(100, ), activation='relu',
+        	hidden_layer_sizes = tuple([self._mlp_hidden_size] * self._mlp_hidden_layers)
+
+        	self.classifier = MLPClassifier(hidden_layer_sizes=hidden_layer_sizes, activation='relu',
                                             solver='adam', batch_size='auto', max_iter=200, shuffle=True,
                                             random_state=42, verbose=self._verbose, early_stopping=True,
                                             validation_fraction=0.1)
@@ -343,7 +349,7 @@ def parse_cmd():
         "-v", "--verbose",
         action="store_true",
         required=False,
-        help="write verbose output to STDERR"
+        help="write verbose output to STDERR (default: False)"
     )
 
     mode_options = parser.add_mutually_exclusive_group(required=True)
@@ -363,14 +369,6 @@ def parse_cmd():
     train_options = parser.add_argument_group("training parameters")
 
     train_options.add_argument(
-        "--f1-averaging",
-        type=str,
-        required=False,
-        choices=["micro", "macro", "weighted"],
-        default="macro",
-        help="if --eval, determines the type of averaging performed to compute F1 (default: macro)"
-    )
-    train_options.add_argument(
         "--data",
         type=str,
         required=False,
@@ -381,7 +379,7 @@ def parse_cmd():
         required=False,
         default=False,
         action="store_true",
-        help="evaluate the performance on held out data and report to STDERR"
+        help="evaluate the performance on held out data and report to STDERR (default: False)"
     )
     train_options.add_argument(
         "--cv-folds",
@@ -398,6 +396,14 @@ def parse_cmd():
         default=0.1,
         metavar="F",
         help="if --eval, size of test fold relative to entire training set (default: 0.1)"
+    )
+    train_options.add_argument(
+        "--f1-averaging",
+        type=str,
+        required=False,
+        choices=["micro", "macro", "weighted"],
+        default="macro",
+        help="if --eval, determines the type of averaging performed to compute F1 (default: macro)"
     )
     train_options.add_argument(
         "--vectorizer",
@@ -436,7 +442,7 @@ def parse_cmd():
         required=False,
         default=None,
         metavar="N",
-        help="exclude classes that have fewer than N samples"
+        help="exclude classes that have fewer than N samples (default: no threshold)"
     )
     train_options.add_argument(
         "--exclude-authors",
@@ -445,7 +451,7 @@ def parse_cmd():
         required=False,
         default=[],
         metavar="A",
-        help="list names of authors that should be excluded"
+        help="list names of authors that should be excluded (default: None)"
     )
     train_options.add_argument(
         "--rename-authors",
@@ -453,22 +459,41 @@ def parse_cmd():
         required=False,
         default={},
         metavar="{A:R}",
-        help="dict with authors that should be renamed {AUTHOR: REPLACEMENT, ...}"
+        help="dict with authors that should be renamed {AUTHOR: REPLACEMENT, ...} (default: None)"
     )
-    train_options.add_argument(
+
+    clf_options = parser.add_argument_group("classifier parameters")
+
+    clf_options.add_argument(
         "--class-weight",
         action="store_true",
         required=False,
         default=False,
-        help="balance uneven distribution of samples per class with weights"
+        help="balance uneven distribution of samples per class with weights (default: False)"
     )
-    train_options.add_argument(
+    clf_options.add_argument(
         "--classifier",
         type=str,
         required=False,
         choices=["sgd-hinge", "mlp"],
         default="sgd-hinge",
         help="classifier to be trained (default: sgd-hinge -> SVM)"
+    )
+    clf_options.add_argument(
+        "--mlp-hidden-layers",
+        type=int,
+        required=False,
+        default=1,
+        metavar="N",
+        help="number of hidden layers if --classifier is 'mlp' (default: 1)"
+    )
+    clf_options.add_argument(
+        "--mlp-hidden-size",
+        type=int,
+        required=False,
+        default=100,
+        metavar="N",
+        help="size of hidden layers if --classifier is 'mlp' (default: 100)"
     )
 
     predict_options = parser.add_argument_group("prediction parameters")
@@ -491,8 +516,12 @@ def parse_cmd():
     # avoid clash with built-in function
     args.evaluation = args.eval
 
-    if args.classifier == "mlp" and args.class_weight:
-        logging.warning("If --classifier is 'mlp', --class-weight will have no effect")
+    if args.classifier == "mlp":
+        if args.class_weight:
+            logging.warning("If --classifier is 'mlp', --class-weight will have no effect")
+    else:
+        if args.mlp_hidden_size or args.mlp_hidden_layers:
+        	logging.warning("If --classifier is 'sgd-hinge', --mlp-hidden-layers and --mlp-hidden-size will have no effect")
 
     return args
 
@@ -525,7 +554,9 @@ def main():
                     evaluation=args.evaluation,
                     cv_folds=args.cv_folds,
                     test_fold_size=args.test_fold_size,
-                    f1_averaging=args.f1_averaging
+                    f1_averaging=args.f1_averaging,
+                    mlp_hidden_layers=args.mlp_hidden_layers,
+                    mlp_hidden_size=args.mlp_hidden_size
                     )
         t.train()
         t.save()
