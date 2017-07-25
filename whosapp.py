@@ -44,14 +44,18 @@ class Trainer(object):
     Reads raw Whatsapp chat data and trains a classifier.
     """
 
-    def __init__(self, model, data, vectorizer, vectorizer_ngram_order,
-                 vectorizer_analyzer, remove_emojis, samples_threshold, exclude_authors,
-                 rename_authors, class_weight, classifier, evaluation, cv_folds,
-                 test_fold_size, f1_averaging):
+    def __init__(self, model="model.pkl", data=None, verbose=False,
+                 vectorizer="count", vectorizer_ngram_order=2,
+                 vectorizer_analyzer="char", remove_emojis=False,
+                 samples_threshold=None, exclude_authors=[],
+                 rename_authors={}, class_weight=False,
+                 classifier="mlp", evaluation=False, cv_folds=5,
+                 test_fold_size=0.1, f1_averaging="macro"):
         """
         """
         self._model = model
         self._data = data
+        self._verbose = verbose
         # vectorizer
         self._vectorizer = vectorizer
         self._vectorizer_ngram_order = vectorizer_ngram_order
@@ -168,6 +172,7 @@ class Trainer(object):
                 index.append(i)
                 i += 1
 
+        self.classes.sort()
         self.num_classes = len(self.classes)
 
         self.df = DataFrame(rows, index=index)
@@ -203,13 +208,13 @@ class Trainer(object):
             class_weight = None
 
         if self._classifier == "sgd-hinge":
-            self.classifier = SGDClassifier(loss='hinge', penalty='l2',
+            self.classifier = SGDClassifier(loss='hinge', penalty='l2', verbose=self._verbose,
                                             alpha=1e-3, n_iter=5, random_state=42,
                                             class_weight=class_weight)
         else:
             self.classifier = MLPClassifier(hidden_layer_sizes=(100, ), activation='relu',
                                             solver='adam', batch_size='auto', max_iter=200, shuffle=True,
-                                            random_state=42, verbose=True, early_stopping=True,
+                                            random_state=42, verbose=self._verbose, early_stopping=True,
                                             validation_fraction=0.1)
 
         self.pipeline = Pipeline([
@@ -269,7 +274,7 @@ class Trainer(object):
         -text-for-more-realistic-training
         """
         if self._classifier == "mlp":
-            logging.warning("Top k informative features only available for linear classifiers - skipping")
+            logging.warning("Top k most informative features only available for linear classifiers - skipping")
             return
         logging.info("Top %d most informative features for each class:" % k)
         feature_names = numpy.asarray(self.vectorizer.get_feature_names())
@@ -297,7 +302,7 @@ class Predictor(object):
     Predicts the author of messages, given a trained model.
     """
 
-    def __init__(self, model):
+    def __init__(self, model="model.pkl"):
         """
         """
         self._model = model
@@ -486,6 +491,9 @@ def parse_cmd():
     # avoid clash with built-in function
     args.evaluation = args.eval
 
+    if args.classifier == "mlp" and args.class_weight:
+        logging.warning("If --classifier is 'mlp', --class-weight will have no effect")
+
     return args
 
 
@@ -504,6 +512,7 @@ def main():
     if args.train:
         t = Trainer(model=args.model,
                     data=args.data,
+                    verbose=args.verbose,
                     vectorizer=args.vectorizer,
                     vectorizer_ngram_order=args.vectorizer_ngram_order,
                     vectorizer_analyzer=args.vectorizer_analyzer,
