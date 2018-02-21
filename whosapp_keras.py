@@ -8,6 +8,10 @@ from keras.models import Sequential
 from keras.layers import Dense, LSTM
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
+from keras.utils import to_categorical
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 from collections import defaultdict
 import codecs
@@ -29,7 +33,7 @@ def preprocess(path=None,
     them into training examples. Date and time are currently extracted
     but ignored.
     """
-    X, y = []
+    X, y = [], []
 
     d = defaultdict(list)
     previous = None, None, None
@@ -89,15 +93,25 @@ def preprocess(path=None,
         for k in deletes:
             del d[k]
 
-    logging.debug("Messages with actual content:")
+    logging.debug("Messages with actual content by author:")
     for k, v in d.iteritems():
         logging.debug("%s %d" % (k, len(v)))
     logging.debug("Total messages: %d\n" %
                   sum([len(v) for v in d.values()]))
 
+    return X, y
+
 
 def build_model():
-    X_train, y_train, X_test, y_test = None, None, None, None
+    X, y = preprocess()
+
+    encoder = LabelEncoder()
+    encoder.fit(y)
+    encoded_y = encoder.transform(y)
+    # convert integers to dummy variables (i.e. one hot encoded)
+    categorical_y = to_categorical(encoded_y)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, categorical_y, test_size=0.1, random_state=None)
 
     # length in characters
     max_seq_len = 100
@@ -114,9 +128,12 @@ def build_model():
     model = Sequential()
     model.add(Embedding(num_words, embedding_vecor_length,
                         input_length=max_seq_len))
+
+    num_classes = len(encoder.classes_)
+
     model.add(LSTM(100))
-    model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy',
+    model.add(Dense(num_classes, activation='softmax'))
+    model.compile(loss='categorical_crossentropy',
                   optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(
@@ -130,4 +147,4 @@ def build_model():
 level = logging.DEBUG
 logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
-preprocess()
+build_model()
