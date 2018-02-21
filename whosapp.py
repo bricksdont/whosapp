@@ -50,7 +50,7 @@ class Trainer(object):
                  samples_threshold=None, exclude_authors=[],
                  rename_authors={}, class_weight=False,
                  classifier="mlp", evaluation=False, cv_folds=5,
-                 test_fold_size=0.1, f1_averaging="macro", 
+                 test_fold_size=0.1, f1_averaging="macro",
                  mlp_hidden_layers=1, mlp_hidden_size=100):
         """
         """
@@ -536,6 +536,7 @@ def main():
         level = logging.INFO
     else:
         level = logging.WARNING
+    level = logging.DEBUG
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
     if args.train:
